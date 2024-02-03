@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Cors;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyBGList.Constants;
@@ -11,16 +12,21 @@ namespace MyBGList.Controllers
 	[ApiController]
 	[Route("[Controller]")]
 	[EnableCors("AnyOrigin")]
+	[ResponseCache(CacheProfileName = "Any-60")]
+
 	public class BoardGamesController : ControllerBase
 	{
 		private readonly ILogger<BoardGamesController> _logger;
 		private readonly ApplicationDbContext _context;
+
 		public BoardGamesController(ILogger<BoardGamesController> logger, ApplicationDbContext context)
 		{
 			_logger = logger;
 			_context = context;
+
 		}
 		[HttpGet(Name = "GetBoardGames")]
+		[Authorize]
 		//[ResponseCache(Location = ResponseCacheLocation.Any, Duration = 60)]
 		public async Task<RestDTO<List<BoardGame>>> Get([FromQuery] RequestDTO<BoardGameDTO> requestDTO)
 		{
@@ -43,6 +49,7 @@ namespace MyBGList.Controllers
 			if (!string.IsNullOrEmpty(requestDTO.FilterQuery))
 				query = query.Where(bg => bg.Name.Contains(requestDTO.FilterQuery));
 
+
 			var recordCount = await query.CountAsync();
 
 			var restDTO = new RestDTO<List<BoardGame>>();
@@ -63,6 +70,7 @@ namespace MyBGList.Controllers
 				RecordCount = recordCount
 			};
 		}
+		[Authorize(Roles = UserRoles.Moderator)]
 		[HttpPost(Name = "UpdateBoardGame")]
 		[ResponseCache(NoStore = true)]
 		public async Task<RestDTO<BoardGame?>> Post(BoardGameDTO boardGameDTO)
@@ -92,6 +100,7 @@ namespace MyBGList.Controllers
 
 			}!;
 		}
+		[Authorize(Roles = UserRoles.Adminstrator)]
 		[HttpDelete(Name = "DeleteBoardGame")]
 		[ResponseCache(NoStore = true)]
 		public async Task<RestDTO<BoardGame?>> Deleate(int id)

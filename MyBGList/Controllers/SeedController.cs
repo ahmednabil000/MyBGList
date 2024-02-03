@@ -1,29 +1,38 @@
 ﻿using CsvHelper;
 using CsvHelper.Configuration;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using MyBGList.Constants;
 using MyBGList.Models;
 using MyBGList.Models.Csv;
 using System.Globalization;
 
 namespace MyBGList.Controllers
 {
+	[Authorize(Roles = UserRoles.Adminstrator)]
 	[Controller]
-	[Route("[Controller]")]
+	[Route("[Controller]/[action]")]
 	public class SeedController : Controller
 	{
 		private readonly ILogger<SeedController> _logger;
 		private readonly ApplicationDbContext _context;
 		private readonly IWebHostEnvironment _webHostEnvironment;
-		public SeedController(ILogger<SeedController> logger, ApplicationDbContext context, IWebHostEnvironment webHostEnvironment)
+		private readonly UserManager<ApiUser> _userManager;
+		private readonly RoleManager<IdentityRole> _roleManager;
+		public SeedController(ILogger<SeedController> logger, ApplicationDbContext context, IWebHostEnvironment webHostEnvironment, RoleManager<IdentityRole> roleManager, UserManager<ApiUser> userManager)
 		{
 			_logger = logger;
 			_context = context;
 			_webHostEnvironment = webHostEnvironment;
+			_roleManager = roleManager;
+			_userManager = userManager;
 		}
+
 		[HttpPut]
 		[ResponseCache(NoStore = true)]
-		public async Task<IActionResult> Put()
+		public async Task<IActionResult> BoardGames()
 		{
 			var config = new CsvConfiguration(CultureInfo.GetCultureInfo("pt-BR"))
 			{
@@ -136,6 +145,64 @@ namespace MyBGList.Controllers
 					});
 				}
 			}
+		}
+		[HttpPost]
+		public async Task<IActionResult> AuthData()
+		{
+			int rolesCreated = 0;
+			int userAddedToRoles = 0;
+
+			if (!await _roleManager.RoleExistsAsync(UserRoles.Adminstrator))
+			{
+				var resault = await _roleManager.CreateAsync(new IdentityRole(UserRoles.Adminstrator));
+				if (resault.Succeeded)
+				{
+					_logger.LogInformation("{role} role has been created", UserRoles.Adminstrator);
+					rolesCreated++;
+				}
+			}
+
+			if (!await _roleManager.RoleExistsAsync(UserRoles.Moderator))
+			{
+				var resault = await _roleManager.CreateAsync(new IdentityRole(UserRoles.Moderator));
+				if (resault.Succeeded)
+				{
+					_logger.LogInformation("{role} role has been created", UserRoles.Moderator);
+					rolesCreated++;
+				}
+			}
+
+			var testAdmin = await _userManager.FindByNameAsync("TestAdminstrator");
+			var testModerator = await _userManager.FindByNameAsync("TestModerator");
+
+			if (testAdmin != null && !await _userManager.IsInRoleAsync(testAdmin, UserRoles.Adminstrator))
+			{
+				var resault = await _userManager.AddToRoleAsync(testAdmin, UserRoles.Adminstrator);
+				var result2 = await _userManager.AddToRoleAsync(testAdmin, UserRoles.Moderator);
+				if (resault.Succeeded)
+				{
+					_logger.LogInformation("Role {role} is added succeessfully to user {user}", UserRoles.Adminstrator, testAdmin.UserName);
+					userAddedToRoles++;
+				}
+				if (result2.Succeeded)
+				{
+					_logger.LogInformation("Role {role} is added succeessfully to user {user}", UserRoles.Moderator, testAdmin.UserName);
+				}
+			}
+			if (testModerator != null && !await _userManager.IsInRoleAsync(testModerator, UserRoles.Moderator))
+			{
+				var resault = await _userManager.AddToRoleAsync(testModerator, UserRoles.Moderator);
+				if (resault.Succeeded)
+				{
+					_logger.LogInformation("Role {role} is added succeessfully to user {user}", UserRoles.Moderator, testModerator.UserName);
+					userAddedToRoles++;
+				}
+			}
+			return new JsonResult(new
+			{
+				CreatedRules = rolesCreated,
+				UserAddedToRoles = userAddedToRoles
+			});
 		}
 	}
 }
